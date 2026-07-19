@@ -1,110 +1,4 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surveillance Project</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-    
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: #f4f4f0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 1rem;
-            margin: 0;
-            min-height: 100vh;
-        }
-        h1 {
-            border: 3px solid black;
-            padding: 10px 20px;
-            background-color: #ffb000;
-            box-shadow: 4px 4px 0px black;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            text-align: center;
-            font-size: clamp(1.2rem, 4vw, 2rem);
-        }
-        .container {
-            position: relative;
-            border: 5px solid black;
-            box-shadow: 6px 6px 0px black;
-            margin-top: 1rem;
-            background-color: black;
-            width: 100%;
-            max-width: 640px;
-            aspect-ratio: 4/3;
-            overflow: hidden;
-        }
-        video, canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1); 
-        }
-        .controls {
-            margin-top: 2rem;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 1rem;
-            width: 100%;
-            max-width: 640px;
-        }
-        button {
-            flex: 1 1 auto;
-            padding: 12px 20px;
-            border: 4px solid black;
-            background-color: #a3a3a3; 
-            color: black;
-            font-weight: 900;
-            font-size: 1rem;
-            box-shadow: 4px 4px 0px black;
-            cursor: pointer;
-            text-transform: uppercase;
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-        button:active {
-            transform: translate(4px, 4px);
-            box-shadow: 0px 0px 0px black;
-        }
-        button.active-mode#btnSpiderman {
-            background-color: #ff5c5c; 
-        }
-        button.active-mode#btnPeace {
-            background-color: #4ade80; 
-        }
-    </style>
-</head>
-<body>
-    <h1>Project Iseng yang Diseriusin</h1>
-    
-    <div class="container">
-        <video id="videoElement" autoplay playsinline></video>
-        <canvas id="canvasElement" width="640" height="480"></canvas>
-    </div>
-    
-    <div class="controls">
-        <button id="btnSpiderman">Portal Mode</button>
-        <button id="btnPeace">Peace Blur</button>
-    </div>
-
-    <!-- DUA AUDIO BERBEDA -->
-    <audio id="audioSpiderman" loop>
-        <source src="spiderman.mp3" type="audio/mpeg">
-    </audio>
-    <audio id="audioPeace" loop>
-        <source src="peace.mp3" type="audio/mpeg">
-    </audio>
-
-    <script>
+<script>
         const videoElement = document.getElementById('videoElement');
         const canvasElement = document.getElementById('canvasElement');
         const canvasCtx = canvasElement.getContext('2d');
@@ -117,31 +11,20 @@
         let currentMode = ''; 
         let videoBlurred = false; 
 
-        const portalFilters = [
-            'invert(100%)',
-            'saturate(300%) contrast(200%)', 
-            'sepia(100%) hue-rotate(90deg) saturate(200%)', 
-            'grayscale(100%) contrast(150%)',
-            'hue-rotate(180deg)',
-            'invert(100%) hue-rotate(180deg) brightness(150%)', 
-            'sepia(100%) saturate(300%) hue-rotate(300deg)', 
-            'contrast(300%) brightness(80%) grayscale(50%)', 
-            'hue-rotate(45deg) saturate(250%) blur(2px)', 
-            'blur(8px) contrast(200%)' 
-        ];
+        // Spider-Verse punya 5 style ekstrem sekarang
+        const totalMultiverseStyles = 5;
         let currentFilterIndex = 0;
         let wasTwoHandsDetected = false;
 
-        // FUNGSI GANTI LAGU
         function switchAudio(mode) {
             if (mode === 'spiderman') {
                 audioPeace.pause();
-                audioPeace.currentTime = 0; // Reset lagu peace
-                audioSpiderman.play().catch(() => console.log("Butuh klik user"));
+                audioPeace.currentTime = 0;
+                audioSpiderman.play().catch(() => console.log("Butuh interaksi klik"));
             } else if (mode === 'peace') {
                 audioSpiderman.pause();
-                audioSpiderman.currentTime = 0; // Reset lagu spiderman
-                audioPeace.play().catch(() => console.log("Butuh klik user"));
+                audioSpiderman.currentTime = 0;
+                audioPeace.play().catch(() => console.log("Butuh interaksi klik"));
             }
         }
 
@@ -187,8 +70,9 @@
             if (currentMode === 'spiderman') {
                 const isTwoHands = results.multiHandLandmarks && results.multiHandLandmarks.length === 2;
                 
+                // Ganti style multiverse setiap jaring putus dan disambung lagi
                 if (isTwoHands && !wasTwoHandsDetected) {
-                    currentFilterIndex = (currentFilterIndex + 1) % portalFilters.length;
+                    currentFilterIndex = (currentFilterIndex + 1) % totalMultiverseStyles;
                 }
                 wasTwoHandsDetected = isTwoHands;
 
@@ -211,11 +95,63 @@
                     canvasCtx.closePath();
                     
                     canvasCtx.clip();
-                    canvasCtx.filter = portalFilters[currentFilterIndex];
-                    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                    
+                    // ==========================================
+                    // EFEK MULTIVERSE SPIDER-VERSE
+                    // ==========================================
+                    if (currentFilterIndex === 0) {
+                        // 1. Chromatic Aberration Glitch (Efek 3D Merah/Biru pecah)
+                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        
+                        canvasCtx.globalCompositeOperation = 'screen';
+                        canvasCtx.globalAlpha = 0.7;
+                        
+                        // Bayangan Merah geser kanan
+                        canvasCtx.filter = 'sepia(100%) hue-rotate(-50deg) saturate(500%)';
+                        canvasCtx.drawImage(results.image, 20, 0, canvasElement.width, canvasElement.height);
+                        
+                        // Bayangan Cyan geser kiri
+                        canvasCtx.filter = 'sepia(100%) hue-rotate(150deg) saturate(500%)';
+                        canvasCtx.drawImage(results.image, -20, 0, canvasElement.width, canvasElement.height);
+                        
+                    } else if (currentFilterIndex === 1) {
+                        // 2. Spider-Gwen (Monokrom kontras tinggi ditimpa Pink/Magenta)
+                        canvasCtx.filter = 'contrast(250%) grayscale(100%) brightness(120%)';
+                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        
+                        canvasCtx.globalCompositeOperation = 'multiply';
+                        canvasCtx.fillStyle = 'rgba(255, 105, 180, 0.5)'; // Hot Pink overlay
+                        canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+                        
+                    } else if (currentFilterIndex === 2) {
+                        // 3. Dimension Slice (Layar robek-robek horizontal ala Kingpin Collider)
+                        const slices = 10;
+                        const sliceH = canvasElement.height / slices;
+                        canvasCtx.filter = 'saturate(200%) contrast(150%) hue-rotate(45deg)';
+                        
+                        for (let i = 0; i < slices; i++) {
+                            // Angka acak dari -30 sampai 30 untuk pergeseran tiap irisan
+                            const offset = (Math.random() - 0.5) * 60; 
+                            canvasCtx.drawImage(results.image,
+                                0, i * sliceH, canvasElement.width, sliceH,
+                                offset, i * sliceH, canvasElement.width, sliceH);
+                        }
+                        
+                    } else if (currentFilterIndex === 3) {
+                        // 4. Prowler Cyberpunk (Neon Invert)
+                        canvasCtx.filter = 'invert(100%) hue-rotate(270deg) contrast(250%) saturate(300%)';
+                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        
+                    } else if (currentFilterIndex === 4) {
+                        // 5. Retro Comic Sense (Kuning/Coklat tajam)
+                        canvasCtx.filter = 'sepia(100%) saturate(400%) hue-rotate(340deg) contrast(200%)';
+                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                    }
+
                     canvasCtx.restore();
 
-                    canvasCtx.lineWidth = 4;
+                    // Garis jaring pembatas
+                    canvasCtx.lineWidth = 5;
                     canvasCtx.strokeStyle = 'white';
                     canvasCtx.beginPath();
                     canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
@@ -262,5 +198,3 @@
         });
         camera.start();
     </script>
-</body>
-</html>
