@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Surveillance Project</title>
+    <title>project iseng</title>
     
     <!-- Load MediaPipe via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -105,11 +105,12 @@
         const btnPeace = document.getElementById('btnPeace');
 
         let currentMode = 'spiderman'; 
-        let videoBlurred = false; // State manager biar gak spam manipulasi DOM
+        let videoBlurred = false; 
 
-        // Variabel untuk Portal (Spiderman) Filter
+        // Daftar filter ditambah ala "cartoon" (saturasi & kontras tinggi)
         const portalFilters = [
             'invert(100%)',
+            'saturate(300%) contrast(200%)', // Efek warna ngejreng ala kartun
             'sepia(100%) hue-rotate(90deg) saturate(200%)', 
             'grayscale(100%) contrast(150%)',
             'hue-rotate(180deg)',
@@ -137,25 +138,29 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         });
 
-        // Inisialisasi MediaPipe Hands
         const hands = new Hands({locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }});
 
         hands.setOptions({
             maxNumHands: 2,
-            modelComplexity: 0, // TURUNKAN KE 0 BIKIN ANTI LAG
-            minDetectionConfidence: 0.5,
+            modelComplexity: 0, 
+            minDetectionConfidence: 0.6, // Naikkan sedikit biar gak asal deteksi
             minTrackingConfidence: 0.5
         });
 
         hands.onResults((results) => {
+            // FIX GAMBAR GEPENG: Samakan ukuran internal kanvas dengan resolusi asli video kamera
+            if (videoElement.videoWidth && canvasElement.width !== videoElement.videoWidth) {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+            }
+
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
             if (currentMode === 'spiderman') {
                 const isTwoHands = results.multiHandLandmarks && results.multiHandLandmarks.length === 2;
                 
-                // Ganti filter otomatis kalau baru ngebentuk 2 tangan lagi
                 if (isTwoHands && !wasTwoHandsDetected) {
                     currentFilterIndex = (currentFilterIndex + 1) % portalFilters.length;
                 }
@@ -170,10 +175,8 @@
                     const p3 = hand2[8]; // Telunjuk 2
                     const p4 = hand2[4]; // Jempol 2
 
-                    // 1. Simpan state kanvas
                     canvasCtx.save();
                     
-                    // 2. Buat path bidangnya (Masking)
                     canvasCtx.beginPath();
                     canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
                     canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
@@ -181,19 +184,14 @@
                     canvasCtx.lineTo(p3.x * canvasElement.width, p3.y * canvasElement.height);
                     canvasCtx.closePath();
                     
-                    // 3. Batasi area gambar (Clip)
                     canvasCtx.clip();
                     
-                    // 4. Kasih efek filter ke konteks
                     canvasCtx.filter = portalFilters[currentFilterIndex];
                     
-                    // 5. Gambar video raw dari mediapipe (results.image) ke dalam area clip
                     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                     
-                    // 6. Kembalikan state kanvas (hapus clip & filter buat frame berikutnya)
                     canvasCtx.restore();
 
-                    // Opsional: Garis tepi neobrutalism
                     canvasCtx.lineWidth = 4;
                     canvasCtx.strokeStyle = 'white';
                     canvasCtx.beginPath();
@@ -211,18 +209,23 @@
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                     const lm = results.multiHandLandmarks[0];
                     
-                    // Logika jari Peace (V): telunjuk & tengah naik, sisanya nekuk
-                    const indexUp = lm[8].y < lm[6].y;
-                    const middleUp = lm[12].y < lm[10].y;
+                    // FIX DETEKSI PEACE: Logika diperketat
+                    // 1. Telunjuk dan Tengah harus tegak (ujung di atas pangkal)
+                    const indexUp = lm[8].y < lm[6].y && lm[6].y < lm[5].y;
+                    const middleUp = lm[12].y < lm[10].y && lm[10].y < lm[9].y;
+                    
+                    // 2. Manis dan Kelingking harus benar-benar menekuk ke bawah
                     const ringDown = lm[16].y > lm[14].y;
                     const pinkyDown = lm[20].y > lm[18].y;
+                    
+                    // 3. Harus ada jarak mendatar (X) antara telunjuk dan jari tengah biar gak cuma ngacungin 1 jari rapat
+                    const isSpread = Math.abs(lm[8].x - lm[12].x) > 0.04; 
 
-                    if (indexUp && middleUp && ringDown && pinkyDown) {
+                    if (indexUp && middleUp && ringDown && pinkyDown && isSpread) {
                         isPeace = true;
                     }
                 }
 
-                // Cek state biar DOM nggak diubah tiap millisecond (cegah lag DOM)
                 if (isPeace && !videoBlurred) {
                     videoElement.style.filter = 'blur(15px)';
                     videoBlurred = true;
@@ -233,13 +236,12 @@
             }
         });
 
-        // Setup Kamera
         const camera = new Camera(videoElement, {
             onFrame: async () => {
                 await hands.send({image: videoElement});
             },
             width: 640,
-            height: 480
+            height: 480 // Ini resolusi request kamera, nanti dicocokkan dinamis di atas
         });
         camera.start();
     </script>
