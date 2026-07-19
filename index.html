@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surveillance Project</title>
     
-    <!-- Load MediaPipe via CDN agar tidak perlu NPM -->
+    <!-- Load MediaPipe via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     
     <style>
@@ -19,7 +17,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 2rem;
+            padding: 1rem;
             margin: 0;
             min-height: 100vh;
         }
@@ -30,38 +28,47 @@
             box-shadow: 4px 4px 0px black;
             text-transform: uppercase;
             letter-spacing: 2px;
+            text-align: center;
+            font-size: clamp(1.2rem, 4vw, 2rem); /* Responsif font */
         }
         .container {
             position: relative;
             border: 5px solid black;
-            box-shadow: 8px 8px 0px black;
+            box-shadow: 6px 6px 0px black;
             margin-top: 1rem;
             background-color: black;
-            width: 640px;
-            height: 480px;
+            width: 100%;
+            max-width: 640px;
+            aspect-ratio: 4/3; /* Jaga proporsi kamera di mobile */
             overflow: hidden;
         }
-        /* Efek mirror agar pergerakan tangan tidak terbalik */
+        /* Mirror efek dan fill container */
         video, canvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            object-fit: cover;
             transform: scaleX(-1); 
         }
         .controls {
             margin-top: 2rem;
             display: flex;
-            gap: 1.5rem;
+            flex-wrap: wrap; /* Biar turun ke bawah di HP */
+            justify-content: center;
+            gap: 1rem;
+            width: 100%;
+            max-width: 640px;
         }
         button {
-            padding: 12px 24px;
+            flex: 1 1 auto;
+            padding: 12px 20px;
             border: 4px solid black;
             background-color: #ff5c5c;
             color: black;
             font-weight: 900;
-            font-size: 1.1rem;
+            font-size: 1rem;
             box-shadow: 4px 4px 0px black;
             cursor: pointer;
             text-transform: uppercase;
@@ -72,21 +79,22 @@
             box-shadow: 0px 0px 0px black;
         }
         button.active-mode {
-            background-color: #4ade80; /* Hijau kalau aktif */
+            background-color: #4ade80;
         }
     </style>
 </head>
 <body>
-    <h1>Project Iseng yang Diseriusin</h1>
+    <h1>Project Iseng</h1>
     
     <div class="container">
         <video id="videoElement" autoplay playsinline></video>
+        <!-- Internal resolusi canvas tetap, CSS yang ngurus ukurannya di layar -->
         <canvas id="canvasElement" width="640" height="480"></canvas>
     </div>
     
     <div class="controls">
-        <button id="btnSpiderman" class="active-mode">Spiderman Filter</button>
-        <button id="btnPeace">Blur Peace</button>
+        <button id="btnSpiderman" class="active-mode">Portal Mode</button>
+        <button id="btnPeace">Peace Blur</button>
     </div>
 
     <script>
@@ -97,13 +105,28 @@
         const btnPeace = document.getElementById('btnPeace');
 
         let currentMode = 'spiderman'; 
+        let videoBlurred = false; // State manager biar gak spam manipulasi DOM
+
+        // Variabel untuk Portal (Spiderman) Filter
+        const portalFilters = [
+            'invert(100%)',
+            'sepia(100%) hue-rotate(90deg) saturate(200%)', 
+            'grayscale(100%) contrast(150%)',
+            'hue-rotate(180deg)',
+            'blur(8px) contrast(200%)'
+        ];
+        let currentFilterIndex = 0;
+        let wasTwoHandsDetected = false;
 
         // Ganti Mode
         btnSpiderman.addEventListener('click', () => {
             currentMode = 'spiderman';
             btnSpiderman.classList.add('active-mode');
             btnPeace.classList.remove('active-mode');
-            videoElement.style.filter = 'none'; // Bersihkan sisa blur
+            if (videoBlurred) {
+                videoElement.style.filter = 'none';
+                videoBlurred = false;
+            }
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         });
 
@@ -111,7 +134,7 @@
             currentMode = 'peace';
             btnPeace.classList.add('active-mode');
             btnSpiderman.classList.remove('active-mode');
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height); // Bersihkan sisa spiderman
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         });
 
         // Inisialisasi MediaPipe Hands
@@ -120,43 +143,65 @@
         }});
 
         hands.setOptions({
-            maxNumHands: 2, // Minimal butuh 2 tangan buat spiderman
-            modelComplexity: 1,
+            maxNumHands: 2,
+            modelComplexity: 0, // TURUNKAN KE 0 BIKIN ANTI LAG
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
 
         hands.onResults((results) => {
-            // Bersihkan kanvas di setiap frame
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
             if (currentMode === 'spiderman') {
-                videoElement.style.filter = 'none'; // Pastikan video tidak blur
+                const isTwoHands = results.multiHandLandmarks && results.multiHandLandmarks.length === 2;
                 
-                // Syarat: Harus dua tangan terdeteksi agar bisa ditarik poligon
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length === 2) {
+                // Ganti filter otomatis kalau baru ngebentuk 2 tangan lagi
+                if (isTwoHands && !wasTwoHandsDetected) {
+                    currentFilterIndex = (currentFilterIndex + 1) % portalFilters.length;
+                }
+                wasTwoHandsDetected = isTwoHands;
+
+                if (isTwoHands) {
                     const hand1 = results.multiHandLandmarks[0];
                     const hand2 = results.multiHandLandmarks[1];
                     
-                    // Ambil koordinat jari. 8 = Telunjuk, 4 = Jempol
-                    const p1 = hand1[8]; 
-                    const p2 = hand1[4]; 
-                    const p3 = hand2[8]; 
-                    const p4 = hand2[4]; 
+                    const p1 = hand1[8]; // Telunjuk 1
+                    const p2 = hand1[4]; // Jempol 1
+                    const p3 = hand2[8]; // Telunjuk 2
+                    const p4 = hand2[4]; // Jempol 2
 
-                    // Gambar jaring/bidang
-                    canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'; // Warna merah transparan
+                    // 1. Simpan state kanvas
+                    canvasCtx.save();
+                    
+                    // 2. Buat path bidangnya (Masking)
                     canvasCtx.beginPath();
                     canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
                     canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
                     canvasCtx.lineTo(p4.x * canvasElement.width, p4.y * canvasElement.height);
                     canvasCtx.lineTo(p3.x * canvasElement.width, p3.y * canvasElement.height);
                     canvasCtx.closePath();
-                    canvasCtx.fill();
                     
-                    // Opsi tambahan: kasih garis tepi
-                    canvasCtx.lineWidth = 2;
+                    // 3. Batasi area gambar (Clip)
+                    canvasCtx.clip();
+                    
+                    // 4. Kasih efek filter ke konteks
+                    canvasCtx.filter = portalFilters[currentFilterIndex];
+                    
+                    // 5. Gambar video raw dari mediapipe (results.image) ke dalam area clip
+                    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                    
+                    // 6. Kembalikan state kanvas (hapus clip & filter buat frame berikutnya)
+                    canvasCtx.restore();
+
+                    // Opsional: Garis tepi neobrutalism
+                    canvasCtx.lineWidth = 4;
                     canvasCtx.strokeStyle = 'white';
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
+                    canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
+                    canvasCtx.lineTo(p4.x * canvasElement.width, p4.y * canvasElement.height);
+                    canvasCtx.lineTo(p3.x * canvasElement.width, p3.y * canvasElement.height);
+                    canvasCtx.closePath();
                     canvasCtx.stroke();
                 }
             } 
@@ -164,30 +209,31 @@
                 let isPeace = false;
                 
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    const landmarks = results.multiHandLandmarks[0]; // Cukup deteksi 1 tangan
+                    const lm = results.multiHandLandmarks[0];
                     
-                    // Logika jari Peace (V):
-                    // Telunjuk (8) & Tengah (12) di atas (nilai Y lebih kecil)
-                    // Manis (16) & Kelingking (20) ditekuk ke bawah (nilai Y lebih besar)
-                    const indexUp = landmarks[8].y < landmarks[6].y;
-                    const middleUp = landmarks[12].y < landmarks[10].y;
-                    const ringDown = landmarks[16].y > landmarks[14].y;
-                    const pinkyDown = landmarks[20].y > landmarks[18].y;
+                    // Logika jari Peace (V): telunjuk & tengah naik, sisanya nekuk
+                    const indexUp = lm[8].y < lm[6].y;
+                    const middleUp = lm[12].y < lm[10].y;
+                    const ringDown = lm[16].y > lm[14].y;
+                    const pinkyDown = lm[20].y > lm[18].y;
 
                     if (indexUp && middleUp && ringDown && pinkyDown) {
                         isPeace = true;
                     }
                 }
 
-                if (isPeace) {
-                    videoElement.style.filter = 'blur(15px)'; // Terapkan blur total
-                } else {
-                    videoElement.style.filter = 'none'; // Lepas blur kalau jari turun
+                // Cek state biar DOM nggak diubah tiap millisecond (cegah lag DOM)
+                if (isPeace && !videoBlurred) {
+                    videoElement.style.filter = 'blur(15px)';
+                    videoBlurred = true;
+                } else if (!isPeace && videoBlurred) {
+                    videoElement.style.filter = 'none';
+                    videoBlurred = false;
                 }
             }
         });
 
-        // Loop Kamera
+        // Setup Kamera
         const camera = new Camera(videoElement, {
             onFrame: async () => {
                 await hands.send({image: videoElement});
