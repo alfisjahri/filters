@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surveillance Project</title>
+    
+    <!-- Load MediaPipe via CDN agar tidak perlu NPM -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <style>
+        /* Tema Neobrutalism TVA */
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f4f4f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            margin: 0;
+            min-height: 100vh;
+        }
+        h1 {
+            border: 3px solid black;
+            padding: 10px 20px;
+            background-color: #ffb000;
+            box-shadow: 4px 4px 0px black;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .container {
+            position: relative;
+            border: 5px solid black;
+            box-shadow: 8px 8px 0px black;
+            margin-top: 1rem;
+            background-color: black;
+            width: 640px;
+            height: 480px;
+            overflow: hidden;
+        }
+        /* Efek mirror agar pergerakan tangan tidak terbalik */
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); 
+        }
+        .controls {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1.5rem;
+        }
+        button {
+            padding: 12px 24px;
+            border: 4px solid black;
+            background-color: #ff5c5c;
+            color: black;
+            font-weight: 900;
+            font-size: 1.1rem;
+            box-shadow: 4px 4px 0px black;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        button:active {
+            transform: translate(4px, 4px);
+            box-shadow: 0px 0px 0px black;
+        }
+        button.active-mode {
+            background-color: #4ade80; /* Hijau kalau aktif */
+        }
+    </style>
+</head>
+<body>
+    <h1>Project Iseng yang Diseriusin</h1>
+    
+    <div class="container">
+        <video id="videoElement" autoplay playsinline></video>
+        <canvas id="canvasElement" width="640" height="480"></canvas>
+    </div>
+    
+    <div class="controls">
+        <button id="btnSpiderman" class="active-mode">Spiderman Filter</button>
+        <button id="btnPeace">Blur Peace</button>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('videoElement');
+        const canvasElement = document.getElementById('canvasElement');
+        const canvasCtx = canvasElement.getContext('2d');
+        const btnSpiderman = document.getElementById('btnSpiderman');
+        const btnPeace = document.getElementById('btnPeace');
+
+        let currentMode = 'spiderman'; 
+
+        // Ganti Mode
+        btnSpiderman.addEventListener('click', () => {
+            currentMode = 'spiderman';
+            btnSpiderman.classList.add('active-mode');
+            btnPeace.classList.remove('active-mode');
+            videoElement.style.filter = 'none'; // Bersihkan sisa blur
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        });
+
+        btnPeace.addEventListener('click', () => {
+            currentMode = 'peace';
+            btnPeace.classList.add('active-mode');
+            btnSpiderman.classList.remove('active-mode');
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height); // Bersihkan sisa spiderman
+        });
+
+        // Inisialisasi MediaPipe Hands
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 2, // Minimal butuh 2 tangan buat spiderman
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            // Bersihkan kanvas di setiap frame
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (currentMode === 'spiderman') {
+                videoElement.style.filter = 'none'; // Pastikan video tidak blur
+                
+                // Syarat: Harus dua tangan terdeteksi agar bisa ditarik poligon
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length === 2) {
+                    const hand1 = results.multiHandLandmarks[0];
+                    const hand2 = results.multiHandLandmarks[1];
+                    
+                    // Ambil koordinat jari. 8 = Telunjuk, 4 = Jempol
+                    const p1 = hand1[8]; 
+                    const p2 = hand1[4]; 
+                    const p3 = hand2[8]; 
+                    const p4 = hand2[4]; 
+
+                    // Gambar jaring/bidang
+                    canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.4)'; // Warna merah transparan
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
+                    canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
+                    canvasCtx.lineTo(p4.x * canvasElement.width, p4.y * canvasElement.height);
+                    canvasCtx.lineTo(p3.x * canvasElement.width, p3.y * canvasElement.height);
+                    canvasCtx.closePath();
+                    canvasCtx.fill();
+                    
+                    // Opsi tambahan: kasih garis tepi
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.strokeStyle = 'white';
+                    canvasCtx.stroke();
+                }
+            } 
+            else if (currentMode === 'peace') {
+                let isPeace = false;
+                
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    const landmarks = results.multiHandLandmarks[0]; // Cukup deteksi 1 tangan
+                    
+                    // Logika jari Peace (V):
+                    // Telunjuk (8) & Tengah (12) di atas (nilai Y lebih kecil)
+                    // Manis (16) & Kelingking (20) ditekuk ke bawah (nilai Y lebih besar)
+                    const indexUp = landmarks[8].y < landmarks[6].y;
+                    const middleUp = landmarks[12].y < landmarks[10].y;
+                    const ringDown = landmarks[16].y > landmarks[14].y;
+                    const pinkyDown = landmarks[20].y > landmarks[18].y;
+
+                    if (indexUp && middleUp && ringDown && pinkyDown) {
+                        isPeace = true;
+                    }
+                }
+
+                if (isPeace) {
+                    videoElement.style.filter = 'blur(15px)'; // Terapkan blur total
+                } else {
+                    videoElement.style.filter = 'none'; // Lepas blur kalau jari turun
+                }
+            }
+        });
+
+        // Loop Kamera
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
+    </script>
+</body>
+</html>
