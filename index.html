@@ -75,12 +75,8 @@
             transform: translate(4px, 4px);
             box-shadow: 0px 0px 0px black;
         }
-        button.active-mode#btnSpiderman {
-            background-color: #ff5c5c; 
-        }
-        button.active-mode#btnPeace {
-            background-color: #4ade80; 
-        }
+        button.active-mode#btnSpiderman { background-color: #ff5c5c; }
+        button.active-mode#btnPeace { background-color: #4ade80; }
     </style>
 </head>
 <body>
@@ -96,13 +92,8 @@
         <button id="btnPeace">Peace Blur</button>
     </div>
 
-    <!-- DUA AUDIO BERBEDA -->
-    <audio id="audioSpiderman" loop>
-        <source src="spiderman.mp3" type="audio/mpeg">
-    </audio>
-    <audio id="audioPeace" loop>
-        <source src="peace.mp3" type="audio/mpeg">
-    </audio>
+    <audio id="audioSpiderman" loop><source src="spiderman.mp3" type="audio/mpeg"></audio>
+    <audio id="audioPeace" loop><source src="peace.mp3" type="audio/mpeg"></audio>
 
     <script>
         const videoElement = document.getElementById('videoElement');
@@ -117,20 +108,39 @@
         let currentMode = ''; 
         let videoBlurred = false; 
 
-        // Spider-Verse punya 5 style ekstrem sekarang
-        const totalMultiverseStyles = 5;
-        let currentFilterIndex = 0;
-        let wasTwoHandsDetected = false;
+        // TRANSLASI CLOSING GESTURE DETECTOR DARI PYTHON
+        class ClosingGestureDetector {
+            constructor(closeRatio = 0.16, openRatio = 0.30) {
+                this.closeRatio = closeRatio;
+                this.openRatio = openRatio;
+                this.isClosed = false;
+            }
+            update(width, frameW) {
+                const closeThreshold = this.closeRatio * frameW;
+                const openThreshold = this.openRatio * frameW;
+                let triggered = false;
+                
+                if (!this.isClosed && width < closeThreshold) {
+                    this.isClosed = true;
+                    triggered = true;
+                } else if (this.isClosed && width > openThreshold) {
+                    this.isClosed = false;
+                }
+                return triggered;
+            }
+        }
+        
+        const gestureDetector = new ClosingGestureDetector();
+        let filtroIndex = 0;
+        const totalFiltros = 5; // Jumlah filter translasi dari OpenCV
 
         function switchAudio(mode) {
             if (mode === 'spiderman') {
-                audioPeace.pause();
-                audioPeace.currentTime = 0;
-                audioSpiderman.play().catch(() => console.log("Butuh interaksi klik"));
+                audioPeace.pause(); audioPeace.currentTime = 0;
+                audioSpiderman.play().catch(() => {});
             } else if (mode === 'peace') {
-                audioSpiderman.pause();
-                audioSpiderman.currentTime = 0;
-                audioPeace.play().catch(() => console.log("Butuh interaksi klik"));
+                audioSpiderman.pause(); audioSpiderman.currentTime = 0;
+                audioPeace.play().catch(() => {});
             }
         }
 
@@ -138,10 +148,7 @@
             currentMode = 'spiderman';
             btnSpiderman.classList.add('active-mode');
             btnPeace.classList.remove('active-mode');
-            if (videoBlurred) {
-                videoElement.style.filter = 'none';
-                videoBlurred = false;
-            }
+            if (videoBlurred) { videoElement.style.filter = 'none'; videoBlurred = false; }
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             switchAudio('spiderman');
         });
@@ -174,96 +181,93 @@
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
             if (currentMode === 'spiderman') {
-                const isTwoHands = results.multiHandLandmarks && results.multiHandLandmarks.length === 2;
-                
-                // Ganti style multiverse setiap jaring putus dan disambung lagi
-                if (isTwoHands && !wasTwoHandsDetected) {
-                    currentFilterIndex = (currentFilterIndex + 1) % totalMultiverseStyles;
-                }
-                wasTwoHandsDetected = isTwoHands;
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length === 2) {
+                    // Sorting tangan kiri dan kanan secara kasar berdasarkan X
+                    let leftHand, rightHand;
+                    if (results.multiHandLandmarks[0][0].x < results.multiHandLandmarks[1][0].x) {
+                        leftHand = results.multiHandLandmarks[0];
+                        rightHand = results.multiHandLandmarks[1];
+                    } else {
+                        leftHand = results.multiHandLandmarks[1];
+                        rightHand = results.multiHandLandmarks[0];
+                    }
 
-                if (isTwoHands) {
-                    const hand1 = results.multiHandLandmarks[0];
-                    const hand2 = results.multiHandLandmarks[1];
-                    
-                    const p1 = hand1[8];
-                    const p2 = hand1[4];
-                    const p3 = hand2[8];
-                    const p4 = hand2[4];
+                    // 8: Index Tip, 4: Thumb Tip
+                    const p1 = {x: leftHand[8].x * canvasElement.width, y: leftHand[8].y * canvasElement.height};
+                    const p2 = {x: leftHand[4].x * canvasElement.width, y: leftHand[4].y * canvasElement.height};
+                    const p3 = {x: rightHand[8].x * canvasElement.width, y: rightHand[8].y * canvasElement.height};
+                    const p4 = {x: rightHand[4].x * canvasElement.width, y: rightHand[4].y * canvasElement.height};
 
+                    // Hitung lebar portal (translasi dari geometry.py)
+                    const topW = Math.hypot(p3.x - p1.x, p3.y - p1.y);
+                    const bottomW = Math.hypot(p4.x - p2.x, p4.y - p2.y);
+                    const portalWidth = (topW + bottomW) / 2.0;
+
+                    // Update detektor gestur
+                    if (gestureDetector.update(portalWidth, canvasElement.width)) {
+                        filtroIndex = (filtroIndex + 1) % totalFiltros;
+                    }
+
+                    // RENDER PORTAL
                     canvasCtx.save();
-                    
                     canvasCtx.beginPath();
-                    canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
-                    canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
-                    canvasCtx.lineTo(p4.x * canvasElement.width, p4.y * canvasElement.height);
-                    canvasCtx.lineTo(p3.x * canvasElement.width, p3.y * canvasElement.height);
+                    canvasCtx.moveTo(p1.x, p1.y);
+                    canvasCtx.lineTo(p2.x, p2.y);
+                    canvasCtx.lineTo(p4.x, p4.y);
+                    canvasCtx.lineTo(p3.x, p3.y);
                     canvasCtx.closePath();
                     
                     canvasCtx.clip();
                     
-                    // ==========================================
-                    // EFEK MULTIVERSE SPIDER-VERSE
-                    // ==========================================
-                    if (currentFilterIndex === 0) {
-                        // 1. Chromatic Aberration Glitch (Efek 3D Merah/Biru pecah)
-                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-                        
+                    // APLIKASI FILTER DARI PYTHON KE JS
+                    if (filtroIndex === 0) {
+                        // filtro_3: Aberrasi kromatik / Glitch (Channel shift)
                         canvasCtx.globalCompositeOperation = 'screen';
-                        canvasCtx.globalAlpha = 0.7;
+                        canvasCtx.filter = 'sepia(100%) hue-rotate(-50deg) saturate(300%)';
+                        canvasCtx.drawImage(results.image, 15, 0, canvasElement.width, canvasElement.height);
+                        canvasCtx.filter = 'sepia(100%) hue-rotate(150deg) saturate(300%)';
+                        canvasCtx.drawImage(results.image, -15, 0, canvasElement.width, canvasElement.height);
                         
-                        // Bayangan Merah geser kanan
-                        canvasCtx.filter = 'sepia(100%) hue-rotate(-50deg) saturate(500%)';
-                        canvasCtx.drawImage(results.image, 20, 0, canvasElement.width, canvasElement.height);
+                    } else if (filtroIndex === 1) {
+                        // filtro_grid: Overlay garis grid
+                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        canvasCtx.strokeStyle = 'rgba(235, 235, 235, 0.5)';
+                        canvasCtx.lineWidth = 1;
+                        canvasCtx.beginPath();
+                        const step = 22;
+                        for(let x=0; x<canvasElement.width; x+=step) { canvasCtx.moveTo(x,0); canvasCtx.lineTo(x, canvasElement.height); }
+                        for(let y=0; y<canvasElement.height; y+=step) { canvasCtx.moveTo(0,y); canvasCtx.lineTo(canvasElement.width, y); }
+                        canvasCtx.stroke();
                         
-                        // Bayangan Cyan geser kiri
-                        canvasCtx.filter = 'sepia(100%) hue-rotate(150deg) saturate(500%)';
-                        canvasCtx.drawImage(results.image, -20, 0, canvasElement.width, canvasElement.height);
-                        
-                    } else if (currentFilterIndex === 1) {
-                        // 2. Spider-Gwen (Monokrom kontras tinggi ditimpa Pink/Magenta)
-                        canvasCtx.filter = 'contrast(250%) grayscale(100%) brightness(120%)';
+                    } else if (filtroIndex === 2) {
+                        // filtro_6: Sepia vintage style
+                        canvasCtx.filter = 'sepia(80%) contrast(120%) brightness(90%)';
                         canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                         
-                        canvasCtx.globalCompositeOperation = 'multiply';
-                        canvasCtx.fillStyle = 'rgba(255, 105, 180, 0.5)'; // Hot Pink overlay
+                    } else if (filtroIndex === 3) {
+                        // filtro_1 / filtro_5 alternative: Kontras ekstrem duotone
+                        canvasCtx.filter = 'grayscale(100%) contrast(300%)';
+                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                        canvasCtx.globalCompositeOperation = 'color';
+                        canvasCtx.fillStyle = 'rgba(118, 30, 214, 0.7)'; // Warna ungu
                         canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
                         
-                    } else if (currentFilterIndex === 2) {
-                        // 3. Dimension Slice (Layar robek-robek horizontal ala Kingpin Collider)
-                        const slices = 10;
-                        const sliceH = canvasElement.height / slices;
-                        canvasCtx.filter = 'saturate(200%) contrast(150%) hue-rotate(45deg)';
-                        
-                        for (let i = 0; i < slices; i++) {
-                            // Angka acak dari -30 sampai 30 untuk pergeseran tiap irisan
-                            const offset = (Math.random() - 0.5) * 60; 
-                            canvasCtx.drawImage(results.image,
-                                0, i * sliceH, canvasElement.width, sliceH,
-                                offset, i * sliceH, canvasElement.width, sliceH);
-                        }
-                        
-                    } else if (currentFilterIndex === 3) {
-                        // 4. Prowler Cyberpunk (Neon Invert)
-                        canvasCtx.filter = 'invert(100%) hue-rotate(270deg) contrast(250%) saturate(300%)';
-                        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-                        
-                    } else if (currentFilterIndex === 4) {
-                        // 5. Retro Comic Sense (Kuning/Coklat tajam)
-                        canvasCtx.filter = 'sepia(100%) saturate(400%) hue-rotate(340deg) contrast(200%)';
+                    } else if (filtroIndex === 4) {
+                        // filtro_blanco: Kaca blur esmerilado
+                        canvasCtx.filter = 'blur(10px) brightness(150%)';
                         canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
                     }
 
                     canvasCtx.restore();
 
-                    // Garis jaring pembatas
-                    canvasCtx.lineWidth = 5;
+                    // Batas portal putih
+                    canvasCtx.lineWidth = 2;
                     canvasCtx.strokeStyle = 'white';
                     canvasCtx.beginPath();
-                    canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
-                    canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
-                    canvasCtx.lineTo(p4.x * canvasElement.width, p4.y * canvasElement.height);
-                    canvasCtx.lineTo(p3.x * canvasElement.width, p3.y * canvasElement.height);
+                    canvasCtx.moveTo(p1.x, p1.y);
+                    canvasCtx.lineTo(p2.x, p2.y);
+                    canvasCtx.lineTo(p4.x, p4.y);
+                    canvasCtx.lineTo(p3.x, p3.y);
                     canvasCtx.closePath();
                     canvasCtx.stroke();
                 }
@@ -273,7 +277,6 @@
                 
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                     const lm = results.multiHandLandmarks[0];
-                    
                     const indexUp = lm[8].y < lm[6].y && lm[6].y < lm[5].y;
                     const middleUp = lm[12].y < lm[10].y && lm[10].y < lm[9].y;
                     const ringDown = lm[16].y > lm[14].y;
