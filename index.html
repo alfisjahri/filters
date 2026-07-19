@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>project iseng</title>
+    <title>Surveillance Project</title>
     
-    <!-- Load MediaPipe via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     
     <style>
-        /* Tema Neobrutalism TVA */
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f4f4f0;
@@ -29,7 +27,7 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             text-align: center;
-            font-size: clamp(1.2rem, 4vw, 2rem); /* Responsif font */
+            font-size: clamp(1.2rem, 4vw, 2rem);
         }
         .container {
             position: relative;
@@ -39,10 +37,9 @@
             background-color: black;
             width: 100%;
             max-width: 640px;
-            aspect-ratio: 4/3; /* Jaga proporsi kamera di mobile */
+            aspect-ratio: 4/3;
             overflow: hidden;
         }
-        /* Mirror efek dan fill container */
         video, canvas {
             position: absolute;
             top: 0;
@@ -55,7 +52,7 @@
         .controls {
             margin-top: 2rem;
             display: flex;
-            flex-wrap: wrap; /* Biar turun ke bawah di HP */
+            flex-wrap: wrap;
             justify-content: center;
             gap: 1rem;
             width: 100%;
@@ -65,7 +62,7 @@
             flex: 1 1 auto;
             padding: 12px 20px;
             border: 4px solid black;
-            background-color: #ff5c5c;
+            background-color: #a3a3a3; 
             color: black;
             font-weight: 900;
             font-size: 1rem;
@@ -78,24 +75,34 @@
             transform: translate(4px, 4px);
             box-shadow: 0px 0px 0px black;
         }
-        button.active-mode {
-            background-color: #4ade80;
+        button.active-mode#btnSpiderman {
+            background-color: #ff5c5c; 
+        }
+        button.active-mode#btnPeace {
+            background-color: #4ade80; 
         }
     </style>
 </head>
 <body>
-    <h1>Project Iseng</h1>
+    <h1>Project Iseng yang Diseriusin</h1>
     
     <div class="container">
         <video id="videoElement" autoplay playsinline></video>
-        <!-- Internal resolusi canvas tetap, CSS yang ngurus ukurannya di layar -->
         <canvas id="canvasElement" width="640" height="480"></canvas>
     </div>
     
     <div class="controls">
-        <button id="btnSpiderman" class="active-mode">Portal Mode</button>
+        <button id="btnSpiderman">Portal Mode</button>
         <button id="btnPeace">Peace Blur</button>
     </div>
+
+    <!-- DUA AUDIO BERBEDA -->
+    <audio id="audioSpiderman" loop>
+        <source src="spiderman.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audioPeace" loop>
+        <source src="peace.mp3" type="audio/mpeg">
+    </audio>
 
     <script>
         const videoElement = document.getElementById('videoElement');
@@ -103,23 +110,41 @@
         const canvasCtx = canvasElement.getContext('2d');
         const btnSpiderman = document.getElementById('btnSpiderman');
         const btnPeace = document.getElementById('btnPeace');
+        
+        const audioSpiderman = document.getElementById('audioSpiderman');
+        const audioPeace = document.getElementById('audioPeace');
 
-        let currentMode = 'spiderman'; 
+        let currentMode = ''; 
         let videoBlurred = false; 
 
-        // Daftar filter ditambah ala "cartoon" (saturasi & kontras tinggi)
         const portalFilters = [
             'invert(100%)',
-            'saturate(300%) contrast(200%)', // Efek warna ngejreng ala kartun
+            'saturate(300%) contrast(200%)', 
             'sepia(100%) hue-rotate(90deg) saturate(200%)', 
             'grayscale(100%) contrast(150%)',
             'hue-rotate(180deg)',
-            'blur(8px) contrast(200%)'
+            'invert(100%) hue-rotate(180deg) brightness(150%)', 
+            'sepia(100%) saturate(300%) hue-rotate(300deg)', 
+            'contrast(300%) brightness(80%) grayscale(50%)', 
+            'hue-rotate(45deg) saturate(250%) blur(2px)', 
+            'blur(8px) contrast(200%)' 
         ];
         let currentFilterIndex = 0;
         let wasTwoHandsDetected = false;
 
-        // Ganti Mode
+        // FUNGSI GANTI LAGU
+        function switchAudio(mode) {
+            if (mode === 'spiderman') {
+                audioPeace.pause();
+                audioPeace.currentTime = 0; // Reset lagu peace
+                audioSpiderman.play().catch(() => console.log("Butuh klik user"));
+            } else if (mode === 'peace') {
+                audioSpiderman.pause();
+                audioSpiderman.currentTime = 0; // Reset lagu spiderman
+                audioPeace.play().catch(() => console.log("Butuh klik user"));
+            }
+        }
+
         btnSpiderman.addEventListener('click', () => {
             currentMode = 'spiderman';
             btnSpiderman.classList.add('active-mode');
@@ -129,6 +154,7 @@
                 videoBlurred = false;
             }
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            switchAudio('spiderman');
         });
 
         btnPeace.addEventListener('click', () => {
@@ -136,6 +162,7 @@
             btnPeace.classList.add('active-mode');
             btnSpiderman.classList.remove('active-mode');
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            switchAudio('peace');
         });
 
         const hands = new Hands({locateFile: (file) => {
@@ -145,12 +172,11 @@
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 0, 
-            minDetectionConfidence: 0.6, // Naikkan sedikit biar gak asal deteksi
+            minDetectionConfidence: 0.6,
             minTrackingConfidence: 0.5
         });
 
         hands.onResults((results) => {
-            // FIX GAMBAR GEPENG: Samakan ukuran internal kanvas dengan resolusi asli video kamera
             if (videoElement.videoWidth && canvasElement.width !== videoElement.videoWidth) {
                 canvasElement.width = videoElement.videoWidth;
                 canvasElement.height = videoElement.videoHeight;
@@ -170,10 +196,10 @@
                     const hand1 = results.multiHandLandmarks[0];
                     const hand2 = results.multiHandLandmarks[1];
                     
-                    const p1 = hand1[8]; // Telunjuk 1
-                    const p2 = hand1[4]; // Jempol 1
-                    const p3 = hand2[8]; // Telunjuk 2
-                    const p4 = hand2[4]; // Jempol 2
+                    const p1 = hand1[8];
+                    const p2 = hand1[4];
+                    const p3 = hand2[8];
+                    const p4 = hand2[4];
 
                     canvasCtx.save();
                     
@@ -185,11 +211,8 @@
                     canvasCtx.closePath();
                     
                     canvasCtx.clip();
-                    
                     canvasCtx.filter = portalFilters[currentFilterIndex];
-                    
                     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-                    
                     canvasCtx.restore();
 
                     canvasCtx.lineWidth = 4;
@@ -209,16 +232,10 @@
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                     const lm = results.multiHandLandmarks[0];
                     
-                    // FIX DETEKSI PEACE: Logika diperketat
-                    // 1. Telunjuk dan Tengah harus tegak (ujung di atas pangkal)
                     const indexUp = lm[8].y < lm[6].y && lm[6].y < lm[5].y;
                     const middleUp = lm[12].y < lm[10].y && lm[10].y < lm[9].y;
-                    
-                    // 2. Manis dan Kelingking harus benar-benar menekuk ke bawah
                     const ringDown = lm[16].y > lm[14].y;
                     const pinkyDown = lm[20].y > lm[18].y;
-                    
-                    // 3. Harus ada jarak mendatar (X) antara telunjuk dan jari tengah biar gak cuma ngacungin 1 jari rapat
                     const isSpread = Math.abs(lm[8].x - lm[12].x) > 0.04; 
 
                     if (indexUp && middleUp && ringDown && pinkyDown && isSpread) {
@@ -241,7 +258,7 @@
                 await hands.send({image: videoElement});
             },
             width: 640,
-            height: 480 // Ini resolusi request kamera, nanti dicocokkan dinamis di atas
+            height: 480 
         });
         camera.start();
     </script>
